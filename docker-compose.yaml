@@ -1,0 +1,20 @@
+services:
+  freeswitch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "19000-19010:19000-19010/udp"
+    env_file:
+      - .env
+    volumes:
+      - ./scripts:/scripts/
+      - ./fsdata:/usr/local/freeswitch/sounds
+      - ./etc:/usr/local/freeswitch/conf
+    networks:
+      comcent_comcent-network:
+        ipv4_address: 172.31.17.8
+
+networks:
+  comcent_comcent-network:
+    external: true
