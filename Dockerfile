@@ -83,8 +83,10 @@ RUN apt-get clean && \
 # Uncomment to cleanup even more
 #RUN rm -rf /usr/src/*
 
-# Add awscli
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" && \
+# Add awscli — match the image architecture. A hardcoded aarch64 binary on the
+# amd64 image made `aws s3 mv` fail silently in s3_upload_bg.sh, so recording
+# uploads never completed and call stories were never persisted.
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" && \
   unzip awscliv2.zip && \
   ./aws/install && \
   rm -rf awscliv2.zip aws
