@@ -102,7 +102,10 @@
     <load module="mod_opus"/>
 
     <!-- File Format Interfaces -->
-    <load module="mod_av"/>
+    <!-- mod_av disabled: it provides only video (H.264, mp4/mkv containers),
+         and its libavresample dependency was removed in Debian 12. Audio
+         file formats are handled by mod_sndfile. -->
+    <!-- <load module="mod_av"/> -->
     <load module="mod_sndfile"/>
     <load module="mod_native_file"/>
     <!--<load module="mod_opusfile"/>-->

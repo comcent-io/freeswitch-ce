@@ -1,5 +1,5 @@
-FROM debian:bullseye
-MAINTAINER Andrey Volk <andrey@signalwire.com>
+FROM debian:bookworm
+# Adapted from SignalWire's FreeSWITCH Dockerfile.
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -yq install git
 
@@ -14,15 +14,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -yq install \
 # general
     libssl-dev zlib1g-dev libdb-dev unixodbc-dev libncurses5-dev libexpat1-dev libgdbm-dev bison erlang-dev libtpl-dev libtiff5-dev uuid-dev \
 # core
-    libpcre3-dev libedit-dev libsqlite3-dev libcurl4-openssl-dev nasm \
+    libpcre2-dev libpcre3-dev libedit-dev libsqlite3-dev libcurl4-openssl-dev nasm \
 # core codecs
     libogg-dev libspeex-dev libspeexdsp-dev \
 # mod_enum
     libldns-dev \
 # mod_python3
     python3-dev \
-# mod_av
-    libavformat-dev libswscale-dev libavresample-dev \
 # mod_lua
     liblua5.2-dev \
 # mod_opus
@@ -40,26 +38,33 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -yq install \
 # s3 cli
     curl unzip
 
-RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/freeswitch_v1.10.10.tar.gz -O /usr/src/freeswitch_v1.10.10.tar.gz \
+RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/freeswitch_v1.11.3.tar.gz -O /usr/src/freeswitch_v1.11.3.tar.gz \
     && mkdir -p /usr/src/freeswitch \
-    && tar -xzf /usr/src/freeswitch_v1.10.10.tar.gz -C /usr/src/freeswitch --strip-components=1 \
-    && rm -rf /usr/src/freeswitch_v1.10.10.tar.gz
+    && tar -xzf /usr/src/freeswitch_v1.11.3.tar.gz -C /usr/src/freeswitch --strip-components=1 \
+    && rm -rf /usr/src/freeswitch_v1.11.3.tar.gz
 RUN mkdir -p /usr/src/libs
-RUN git clone https://github.com/signalwire/libks /usr/src/libs/libks
-RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/sofia-sip_v1.13.17.tar.gz -O /usr/src/libs/sofia-sip_v1.13.17.tar.gz \
+# This tarball keeps its .git directory, and is extracted with --no-same-owner
+# so the tree is root-owned: libks's CMakeLists generates a Debian changelog via
+# `git log` and needs the previous tag reachable, and git refuses to run in a
+# repo owned by another uid.
+RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/libks_v2.0.11.tar.gz -O /usr/src/libs/libks_v2.0.11.tar.gz \
+    && mkdir -p /usr/src/libs/libks \
+    && tar --no-same-owner -xzf /usr/src/libs/libks_v2.0.11.tar.gz -C /usr/src/libs/libks --strip-components=1 \
+    && rm -rf /usr/src/libs/libks_v2.0.11.tar.gz
+RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/sofia-sip_v1.13.18.tar.gz -O /usr/src/libs/sofia-sip_v1.13.18.tar.gz \
     && mkdir -p /usr/src/libs/sofia-sip \
-    && tar -xzf /usr/src/libs/sofia-sip_v1.13.17.tar.gz -C /usr/src/libs/sofia-sip --strip-components=1 \
-    && rm -rf /usr/src/libs/sofia-sip_v1.13.17.tar.gz
-RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/spandsp_67d2455.tar.gz -O /usr/src/libs/spandsp_67d2455.tar.gz \
+    && tar -xzf /usr/src/libs/sofia-sip_v1.13.18.tar.gz -C /usr/src/libs/sofia-sip --strip-components=1 \
+    && rm -rf /usr/src/libs/sofia-sip_v1.13.18.tar.gz
+RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/spandsp_v3.1.1.tar.gz -O /usr/src/libs/spandsp_v3.1.1.tar.gz \
     && mkdir -p /usr/src/libs/spandsp \
-    && tar -xzf /usr/src/libs/spandsp_67d2455.tar.gz -C /usr/src/libs/spandsp --strip-components=1 \
-    && rm -rf /usr/src/libs/spandsp_67d2455.tar.gz
+    && tar -xzf /usr/src/libs/spandsp_v3.1.1.tar.gz -C /usr/src/libs/spandsp --strip-components=1 \
+    && rm -rf /usr/src/libs/spandsp_v3.1.1.tar.gz
 RUN wget -nv https://comcent-oss-artifacts.s3.amazonaws.com/downloads/signalwire-c_v2.0.0.tar.gz -O /usr/src/libs/signalwire-c_v2.0.0.tar.gz \
     && mkdir -p /usr/src/libs/signalwire-c \
     && tar -xzf /usr/src/libs/signalwire-c_v2.0.0.tar.gz -C /usr/src/libs/signalwire-c --strip-components=1 \
     && rm -rf /usr/src/libs/signalwire-c_v2.0.0.tar.gz
 
-RUN cd /usr/src/libs/libks && git fetch --tags && git checkout v2.0.3 && cmake . -DCMAKE_INSTALL_PREFIX=/usr -DWITH_LIBBACKTRACE=1 && make install
+RUN cd /usr/src/libs/libks && cmake . -DCMAKE_INSTALL_PREFIX=/usr -DWITH_LIBBACKTRACE=1 && make install
 RUN cd /usr/src/libs/sofia-sip && ./bootstrap.sh && ./configure CFLAGS="-g -ggdb" --with-pic --with-glib=no --without-doxygen --disable-stun --prefix=/usr && make -j`nproc --all` && make install
 RUN cd /usr/src/libs/spandsp && ./bootstrap.sh && ./configure CFLAGS="-g -ggdb" --with-pic --prefix=/usr && make -j`nproc --all` && make install
 RUN cd /usr/src/libs/signalwire-c && PKG_CONFIG_PATH=/usr/lib/pkgconfig cmake . -DCMAKE_INSTALL_PREFIX=/usr && make install
@@ -70,6 +75,7 @@ RUN cd /usr/src/freeswitch \
     && sed -i 's|#formats/mod_shout|formats/mod_shout|' /usr/src/freeswitch/build/modules.conf.in \
     && sed -i 's|#xml_int/mod_xml_curl|xml_int/mod_xml_curl|' /usr/src/freeswitch/build/modules.conf.in \
     && sed -i 's|#event_handlers/mod_amqp|event_handlers/mod_amqp|' /usr/src/freeswitch/build/modules.conf.in \
+    && sed -i -E 's|^([a-z_]+/mod_av)$|#\1|' /usr/src/freeswitch/build/modules.conf.in \
     && ./bootstrap.sh -j \
     && ./configure \
     && make -j`nproc` && make install
