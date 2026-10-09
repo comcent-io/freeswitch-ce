@@ -107,7 +107,9 @@ else
 	delete_archives
 fi
 
-if [ "$EPMD"="true" ]; then
+# epmd is only for mod_erlang_event/mod_kazoo, neither of which is built, and
+# the slim image no longer ships Erlang. Start it only where it exists.
+if [ "$EPMD"="true" ] && [ -x /usr/bin/epmd ]; then
     /usr/bin/epmd -daemon
 fi
 
@@ -177,9 +179,9 @@ sed -i "s|rtp_end_port=.*\"|rtp_end_port=${RTP_END_PORT_VALUE}\"|" /usr/local/fr
 #     echo "New FreeSwitch password for SIP calls set to '$SIP_PASSWORD'"
 # fi
 
-trap '/usr/src/freeswitch/freeswitch -stop' SIGTERM
+trap '/usr/local/freeswitch/bin/freeswitch -stop' SIGTERM
 
-/usr/src/freeswitch/freeswitch -nc -nf -nonat &
+/usr/local/freeswitch/bin/freeswitch -nc -nf -nonat &
 pid="$!"
 
 wait $pid

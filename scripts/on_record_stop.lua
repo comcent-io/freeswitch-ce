@@ -1,6 +1,6 @@
 -- Fire-and-forget hand-off to s3_upload_bg.sh.
 --
--- Everything expensive (sox hold-splicing, shasum, `aws s3 mv`,
+-- Everything expensive (sox hold-splicing, sha512sum, `aws s3 mv`,
 -- pushing the comcent::s3UploadCompleted CUSTOM event back into FS)
 -- runs in a detached shell process, so this hook returns in microseconds
 -- and never blocks FS's event dispatch thread.
