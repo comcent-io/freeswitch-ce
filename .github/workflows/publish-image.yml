@@ -77,8 +77,15 @@ jobs:
         run: |
           IMG="ghcr.io/comcent-io/freeswitch-ce"
           SHORT_SHA="${GITHUB_SHA::7}"
+          # Only main moves latest/main; a manual run on another branch gets a
+          # tag named after the branch, so it can be tested without replacing
+          # the published image.
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            tags="-t ${IMG}:latest -t ${IMG}:main"
+          else
+            tags="-t ${IMG}:${GITHUB_REF_NAME//[^a-zA-Z0-9_.-]/-}"
+          fi
           docker buildx imagetools create \
-            -t "${IMG}:latest" \
-            -t "${IMG}:main" \
+            $tags \
             -t "${IMG}:sha-${SHORT_SHA}" \
             $(printf "${IMG}@sha256:%s " *)

@@ -151,7 +151,8 @@ if [ -n "$hold_ranges" ]; then
 fi
 
 # 2. sha512 + file size
-sha512=$(shasum -a 512 "$record_file" 2>/dev/null | awk '{print $1}')
+# sha512sum (coreutils) prints the same digest as `shasum -a 512`, which needs Perl.
+sha512=$(sha512sum "$record_file" 2>/dev/null | awk '{print $1}')
 file_size=$(stat -c%s "$record_file" 2>/dev/null || echo 0)
 
 # 3. aws s3 mv — the expensive part that used to block FS
