@@ -169,22 +169,44 @@ fi
 
 # 4. Fire the upload-completed CUSTOM event back into FS via raw ESL.
 # `fs_cli -x sendevent` can't carry the multiline body cleanly, so we
-# speak ESL directly. Event socket is bound on the container's docker-
-# network IP (127.0.0.1 is ACL-rejected here), so we use `hostname -I`.
-fs_ip=$(hostname -I | awk '{print $1}')
+# speak ESL directly. The socket only admits the "private" ACL
+# (FS_LOCAL_NETWORK), so try loopback, then each of this host's addresses,
+# and use the first one it accepts. Only ever taking the first of
+# `hostname -I` breaks under host networking: that is the public IP,
+# every event is refused, and no call story is saved.
+esl_hosts="127.0.0.1 $(hostname -I)"
 
-python3 - "$fs_ip" "$subdomain" "$call_story_id" "$channel_id" "$filename" "$file_size" "$record_file" "$sha512" <<'PY' >/dev/null 2>&1
+esl_host=$(python3 - "$subdomain" "$call_story_id" "$channel_id" "$filename" "$file_size" "$record_file" "$sha512" $esl_hosts <<'PY' 2>/dev/null
 import socket, sys, time
-ip, subdomain, call_story_id, channel_id, filename, file_size, record_file, sha512 = sys.argv[1:]
-s = socket.socket()
-s.settimeout(5)
-s.connect((ip, 8021))
-s.sendall(b"auth ClueCon\n\n")
-time.sleep(0.05)
-try:
-    s.recv(4096)
-except Exception:
-    pass
+subdomain, call_story_id, channel_id, filename, file_size, record_file, sha512 = sys.argv[1:8]
+
+def connect(ip):
+    # Refused connections get text/rude-rejection instead of +OK accepted.
+    try:
+        s = socket.create_connection((ip, 8021), timeout=5)
+        s.sendall(b"auth ClueCon\n\n")
+        reply = b""
+        while b"+OK accepted" not in reply and b"-ERR" not in reply and b"rude-rejection" not in reply:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            reply += chunk
+        if b"+OK accepted" in reply:
+            return s
+        s.close()
+    except OSError:
+        pass
+    return None
+
+s, ip = None, None
+for candidate in sys.argv[8:]:
+    s = connect(candidate)
+    if s:
+        ip = candidate
+        break
+if not s:
+    sys.exit(1)
+
 body = (
     f"sendevent CUSTOM\n"
     f"Event-Subclass: comcent::s3UploadCompleted\n"
@@ -203,6 +225,12 @@ try:
 except Exception:
     pass
 s.close()
+print(ip)
 PY
+)
+if [ -z "$esl_host" ]; then
+  log "uploaded $filename but no event socket address ($esl_hosts) accepted the completion event for call=$call_story_id"
+  exit 1
+fi
 
-log "uploaded $filename (${file_size}B) and fired completion event for call=$call_story_id"
+log "uploaded $filename (${file_size}B) and fired completion event via $esl_host for call=$call_story_id"
